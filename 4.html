@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <title>El Taller del Juguetero 3D | WebXR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    
+    <link type="text/css" rel="stylesheet" href="https://xrblocks.github.io/css/xr.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+      window.litDisableBundleWarning = true;
+    </script>
+    
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/",
+          "xrblocks": "https://cdn.jsdelivr.net/npm/xrblocks@0.16.0/build/xrblocks.js",
+          "xrblocks/addons/": "https://cdn.jsdelivr.net/npm/xrblocks@0.16.0/build/addons/"
+        }
+      }
+    </script>
+    
+    <style>
+      body { font-family: 'Quicksand', sans-serif; background-color: #0f0a06; overflow: hidden; }
+      h1, h2 { font-family: 'Cinzel', serif; }
+    </style>
+  </head>
+
+  <body class="relative w-full h-screen text-amber-100 select-none">
+    
+    <!-- UI Overlay -->
+    <div class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
+        <header class="flex justify-between items-start pointer-events-auto w-full max-w-xl bg-black/70 backdrop-blur-md border border-amber-900/40 p-4 rounded-2xl shadow-2xl">
+            <div>
+                <h1 class="text-xl font-bold text-amber-400 flex items-center gap-2">
+                    <i data-lucide="sparkles" class="text-amber-400"></i> Taller del Juguetero
+                </h1>
+                <p class="text-xs text-amber-200/80 mt-1">Coloca el barco en el pedestal para viajar.</p>
+            </div>
+            <button id="btn-music" class="p-2.5 bg-amber-900/30 hover:bg-amber-900/60 border border-amber-500/30 text-amber-300 rounded-xl transition">
+                <i id="music-icon" data-lucide="music" class="w-5 h-5"></i>
+            </button>
+        </header>
+    </div>
+
+    <!-- Transición -->
+    <div id="transition-overlay" class="fixed inset-0 bg-black flex flex-col items-center justify-center z-50 transition-opacity duration-1000 opacity-0 pointer-events-none">
+        <div class="text-center">
+            <i data-lucide="anchor" class="w-16 h-16 text-amber-400 mx-auto mb-4"></i>
+            <h2 class="text-3xl font-bold text-amber-300 tracking-widest uppercase">Viajando...</h2>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as xb from 'xrblocks';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        lucide.createIcons();
+
+        const modelUrls = {
+            escritorio: "https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/Intento2/1escritorio.glb",
+            train: "https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/Intento2/1tren.glb",
+            plane: "https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/Intento2/1avion.glb",
+            boat: "https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/Intento2/1barco.glb",
+            truck: "https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/Intento2/1camion.glb",
+            viajeEscena: "https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/main/barco-scene.glb",
+            palanca: "https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/main/palanca.glb"
+        };
+
+        class ToyWorkshop extends xb.Script {
+            constructor() {
+                super();
+                this.currentSceneState = 'taller';
+                this.tallerGroup = new THREE.Group();
+                this.viajeGroup = new THREE.Group();
+                this.leverModel = null;
+                this.leverHandle = null;
+                this.leverTargetRotation = 0;
+                this.leverCurrentRotation = 0;
+            }
+
+            init() {
+                xb.core.scene.add(this.tallerGroup);
+                xb.core.scene.add(this.viajeGroup);
+                this.viajeGroup.visible = false;
+                xb.core.camera.position.set(0, 1.65, 2.3);
+                this.setupLights();
+            }
+
+            setupLights() {
+                this.tallerGroup.add(new THREE.AmbientLight(0x3d2110, 0.5));
+                this.viajeGroup.add(new THREE.AmbientLight(0x132238, 0.6));
+            }
+
+            triggerTravelTransition() {
+                this.currentSceneState = 'viaje';
+                const overlay = document.getElementById('transition-overlay');
+                overlay.classList.remove('pointer-events-none', 'opacity-0');
+                overlay.classList.add('opacity-100');
+
+                setTimeout(() => {
+                    this.tallerGroup.visible = false;
+                    this.viajeGroup.visible = true;
+                    this.loadLever();
+                    overlay.classList.remove('opacity-100');
+                    overlay.classList.add('opacity-0', 'pointer-events-none');
+                }, 1000);
+            }
+
+            loadLever() {
+                if (this.leverModel) return;
+                const loader = new GLTFLoader();
+                loader.load(modelUrls.palanca, (gltf) => {
+                    this.leverModel = gltf.scene;
+                    this.leverModel.position.set(0, 1.2, -1.0);
+                    this.leverModel.scale.set(0.3, 0.3, 0.3);
+                    
+                    this.leverModel.traverse(child => {
+                        if (child.name.toLowerCase().includes("handle") || child.name.toLowerCase().includes("palanca")) {
+                            this.leverHandle = child;
+                        }
+                    });
+                    this.viajeGroup.add(this.leverModel);
+                });
+            }
+
+            returnToTaller() {
+                this.currentSceneState = 'taller';
+                this.viajeGroup.visible = false;
+                this.tallerGroup.visible = true;
+                this.leverModel = null;
+            }
+
+            update() {
+                if (this.currentSceneState === 'viaje' && this.leverHandle) {
+                    this.leverHandle.rotation.x = THREE.MathUtils.lerp(this.leverHandle.rotation.x, this.leverTargetRotation, 0.1);
+                }
+            }
+
+            onPointerDown(event) {
+                if (this.currentSceneState === 'viaje') {
+                    const raycaster = new THREE.Raycaster();
+                    const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+                    raycaster.setFromCamera(mouse, xb.core.camera);
+                    
+                    if (this.leverModel && raycaster.intersectObject(this.leverModel, true).length > 0) {
+                        this.leverTargetRotation = Math.PI / 2; // Activar acción de la palanca
+                        setTimeout(() => this.returnToTaller(), 500);
+                    }
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            xb.add(new ToyWorkshop());
+            xb.init();
+        });
+    </script>
+  </body>
+</html>

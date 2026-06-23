@@ -44,7 +44,7 @@
       }
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #464644;
+        background-color: #1e2010;
         overflow: hidden;
         color: var(--col-cream);
       }
@@ -62,14 +62,14 @@
         width: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: rgba(70, 70, 68, 0.5);
+        background: rgba(30, 32, 16, 0.5);
       }
       ::-webkit-scrollbar-thumb {
-        background: rgba(76, 92, 45, 0.72);
+        background: rgba(113, 131, 72, 0.5);
         border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: rgba(113, 131, 72, 0.92);
+        background: rgba(113, 131, 72, 0.8);
       }
     </style>
   </head>
@@ -213,7 +213,7 @@
                 <div class="bg-[#464644]/45 border border-[#718348]/25 rounded-lg px-3 py-2">Grip: tomar y soltar objetos.</div>
                 <div class="bg-[#464644]/45 border border-[#718348]/25 rounded-lg px-3 py-2">Trigger: activar botones, palancas y carteles.</div>
                 <div class="bg-[#464644]/45 border border-[#718348]/25 rounded-lg px-3 py-2">Boton X izquierdo: menu de opciones.</div>
-                <div class="bg-[#464644]/45 border border-[#718348]/25 rounded-lg px-3 py-2">Grip sobre nubes: tomar, mover y apilar.</div>
+                <div class="bg-[#464644]/45 border border-[#718348]/25 rounded-lg px-3 py-2">Dos grips en nubes: separar agranda, acercar achica.</div>
             </div>
             <div class="mt-6 w-48 h-1 bg-[#4C5C2D]/70 rounded-full mx-auto overflow-hidden">
                 <div class="h-full bg-[#718348] animate-[pulse_1.5s_infinite] w-full"></div>
@@ -364,8 +364,6 @@
                 this.xrLightLevel = 120;
                 this.xrLightValueMesh = null;
                 this.xrLeftHandHint = null;
-                this.xrPerformanceMode = false;
-                this._seaLastNormalUpdate = 0;
                 this.heldObjectLeft = null;
                 this.heldObjectRight = null;
                 this.GRAB_DISTANCE = 0.22;
@@ -387,8 +385,6 @@
                 this.largePlaneModel = null;
                 this.skyFloorModel = null;
                 this.skySceneFloorY = 0.0;
-                this.planeSceneGroup = null;
-                this.planeSceneYOffset = -0.5;
                 this.cloudMachine = null;
                 this.coinSlot = null;
                 this.slotLever = null;
@@ -397,6 +393,8 @@
                 this.skyMovableObjects = [];
                 this.selectedSkyObject = null;
                 this.dispensedClouds = [];
+                this.cloudGripControllers = { left: null, right: null };
+                this.cloudScaleGesture = null;
                 this.coinsCollected = 0;
                 this.boatInteractiveObjects = [];
                 this.boatMovableObjects = [];
@@ -550,9 +548,9 @@
 
                 renderer.xr.addEventListener('sessionstart', () => {
                     this.isXRSessionActive = true;
-                    this.setXRPerformanceMode(true);
                     if (this.boatWallHelpers) this.boatWallHelpers.visible = false;
                     (this.sceneDirectionHelpers || []).forEach(helper => helper.visible = false);
+                    (this.chestDimensionHelpers || []).forEach(helper => helper.visible = false);
                     (this.chestDimensionHelpers || []).forEach(helper => helper.visible = false);
                     this.xrButtonStates.clear();
                     this.createXRMenu();
@@ -562,9 +560,9 @@
 
                 renderer.xr.addEventListener('sessionend', () => {
                     this.isXRSessionActive = false;
-                    this.setXRPerformanceMode(false);
                     if (this.boatWallHelpers && this.activeTravelToy === 'boat') this.boatWallHelpers.visible = true;
                     (this.sceneDirectionHelpers || []).forEach(helper => helper.visible = true);
+                    if (this.activeTravelToy === 'boat') (this.chestDimensionHelpers || []).forEach(helper => helper.visible = true);
                     if (this.activeTravelToy === 'boat') (this.chestDimensionHelpers || []).forEach(helper => helper.visible = true);
                     this.activeXRController = null;
                     this.selectedObject = null;
@@ -688,9 +686,9 @@
                     new THREE.MeshBasicMaterial({
                         map: this.createXRTextTexture('X\nMenu', 320, 180, {
                             size: 40,
-                            background: 'rgba(70, 70, 68, 0.9)',
-                            border: 'rgba(113, 131, 72, 0.9)',
-                            color: '#FFF4F5'
+                            background: 'rgba(19, 9, 4, 0.82)',
+                            border: 'rgba(125, 211, 252, 0.85)',
+                            color: '#dff6ff'
                         }),
                         transparent: true,
                         side: THREE.DoubleSide
@@ -705,12 +703,12 @@
                 canvas.width = width;
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
-                ctx.fillStyle = options.background || 'rgba(70, 70, 68, 0.94)';
+                ctx.fillStyle = options.background || 'rgba(24, 12, 4, 0.92)';
                 ctx.fillRect(0, 0, width, height);
-                ctx.strokeStyle = options.border || 'rgba(113, 131, 72, 0.86)';
+                ctx.strokeStyle = options.border || 'rgba(245, 158, 11, 0.75)';
                 ctx.lineWidth = 8;
                 ctx.strokeRect(4, 4, width - 8, height - 8);
-                ctx.fillStyle = options.color || '#FFF4F5';
+                ctx.fillStyle = options.color || '#fde68a';
                 ctx.font = `${options.weight || 700} ${options.size || 34}px Inter, Arial, sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -734,88 +732,55 @@
                 menu.visible = false;
 
                 const back = new THREE.Mesh(
-                    new THREE.PlaneGeometry(1.22, 2.18),
-                    new THREE.MeshBasicMaterial({ color: 0x464644, transparent: true, opacity: 0.92, side: THREE.DoubleSide })
+                    new THREE.PlaneGeometry(1.22, 1.34),
+                    new THREE.MeshBasicMaterial({ color: 0x130904, transparent: true, opacity: 0.88, side: THREE.DoubleSide })
                 );
                 back.position.z = -0.015;
                 menu.add(back);
 
                 const title = new THREE.Mesh(
                     new THREE.PlaneGeometry(1.02, 0.18),
-                    new THREE.MeshBasicMaterial({ map: this.createXRTextTexture('Menu de inicio', 512, 128, { size: 36, background: 'rgba(76, 92, 45, 0.98)', border: 'rgba(113, 131, 72, 0.96)' }), transparent: true, side: THREE.DoubleSide })
+                    new THREE.MeshBasicMaterial({ map: this.createXRTextTexture('Menu de opciones', 512, 128, { size: 36, background: 'rgba(69, 26, 3, 0.98)' }), transparent: true, side: THREE.DoubleSide })
                 );
-                title.position.y = 0.91;
+                title.position.y = 0.49;
                 menu.add(title);
 
                 this.xrMenuItems = [];
                 const lightLabel = new THREE.Mesh(
                     new THREE.PlaneGeometry(0.82, 0.13),
                     new THREE.MeshBasicMaterial({
-                        map: this.createXRTextTexture('Calibrar luz ambiente', 512, 96, { size: 28, background: 'rgba(70, 70, 68, 0.86)', border: 'rgba(113, 131, 72, 0.55)' }),
+                        map: this.createXRTextTexture('Calibrar luz ambiente', 512, 96, { size: 28, background: 'rgba(24, 12, 4, 0.72)', border: 'rgba(245, 158, 11, 0.35)' }),
                         transparent: true,
                         side: THREE.DoubleSide
                     })
                 );
-                lightLabel.position.set(0, 0.71, 0.002);
+                lightLabel.position.set(0, 0.30, 0.002);
                 menu.add(lightLabel);
 
                 const lightMinus = new THREE.Mesh(
                     new THREE.PlaneGeometry(0.22, 0.17),
                     new THREE.MeshBasicMaterial({ map: this.createXRTextTexture('-', 256, 128, { size: 58 }), transparent: true, side: THREE.DoubleSide })
                 );
-                lightMinus.position.set(-0.38, 0.53, 0.002);
+                lightMinus.position.set(-0.38, 0.12, 0.002);
                 lightMinus.userData.xrMenuAction = 'light-down';
                 menu.add(lightMinus);
                 this.xrMenuItems.push(lightMinus);
 
                 this.xrLightValueMesh = new THREE.Mesh(
                     new THREE.PlaneGeometry(0.38, 0.17),
-                    new THREE.MeshBasicMaterial({ map: this.createXRTextTexture(`${this.xrLightLevel}%`, 256, 128, { size: 38, background: 'rgba(76, 92, 45, 0.95)' }), transparent: true, side: THREE.DoubleSide })
+                    new THREE.MeshBasicMaterial({ map: this.createXRTextTexture(`${this.xrLightLevel}%`, 256, 128, { size: 38, background: 'rgba(69, 26, 3, 0.95)' }), transparent: true, side: THREE.DoubleSide })
                 );
-                this.xrLightValueMesh.position.set(0, 0.53, 0.002);
+                this.xrLightValueMesh.position.set(0, 0.12, 0.002);
                 menu.add(this.xrLightValueMesh);
 
                 const lightPlus = new THREE.Mesh(
                     new THREE.PlaneGeometry(0.22, 0.17),
                     new THREE.MeshBasicMaterial({ map: this.createXRTextTexture('+', 256, 128, { size: 52 }), transparent: true, side: THREE.DoubleSide })
                 );
-                lightPlus.position.set(0.38, 0.53, 0.002);
+                lightPlus.position.set(0.38, 0.12, 0.002);
                 lightPlus.userData.xrMenuAction = 'light-up';
                 menu.add(lightPlus);
                 this.xrMenuItems.push(lightPlus);
-
-                const toyActions = [
-                    { label: 'Tren', action: 'spawn-train' },
-                    { label: 'Avion', action: 'spawn-plane' },
-                    { label: 'Barco', action: 'spawn-boat' },
-                    { label: 'Camion', action: 'spawn-truck' }
-                ];
-                const toyLabel = new THREE.Mesh(
-                    new THREE.PlaneGeometry(0.82, 0.12),
-                    new THREE.MeshBasicMaterial({ map: this.createXRTextTexture('Crear juguete', 512, 96, { size: 28, background: 'rgba(70, 70, 68, 0.86)', border: 'rgba(113, 131, 72, 0.55)' }), transparent: true, side: THREE.DoubleSide })
-                );
-                toyLabel.position.set(0, 0.29, 0.002);
-                menu.add(toyLabel);
-
-                toyActions.forEach((item, index) => {
-                    const button = new THREE.Mesh(
-                        new THREE.PlaneGeometry(0.46, 0.16),
-                        new THREE.MeshBasicMaterial({ map: this.createXRTextTexture(item.label, 256, 128, { size: 26 }), transparent: true, side: THREE.DoubleSide })
-                    );
-                    button.position.set(index % 2 === 0 ? -0.25 : 0.25, 0.10 - Math.floor(index / 2) * 0.20, 0.002);
-                    button.userData.xrMenuAction = item.action;
-                    menu.add(button);
-                    this.xrMenuItems.push(button);
-                });
-
-                const clearButton = new THREE.Mesh(
-                    new THREE.PlaneGeometry(0.96, 0.16),
-                    new THREE.MeshBasicMaterial({ map: this.createXRTextTexture('Despejar juguetes', 512, 128, { size: 28, background: 'rgba(217, 104, 104, 0.5)', border: 'rgba(217, 104, 104, 0.9)' }), transparent: true, side: THREE.DoubleSide })
-                );
-                clearButton.position.set(0, -0.31, 0.002);
-                clearButton.userData.xrMenuAction = 'clear-toys';
-                menu.add(clearButton);
-                this.xrMenuItems.push(clearButton);
 
                 const items = [
                     { label: 'Musica', action: 'music' },
@@ -826,10 +791,10 @@
 
                 items.forEach((item, index) => {
                     const button = new THREE.Mesh(
-                        new THREE.PlaneGeometry(0.96, 0.15),
-                        new THREE.MeshBasicMaterial({ map: this.createXRTextTexture(item.label, 512, 128, { size: 28 }), transparent: true, side: THREE.DoubleSide })
+                        new THREE.PlaneGeometry(0.96, 0.18),
+                        new THREE.MeshBasicMaterial({ map: this.createXRTextTexture(item.label, 512, 128, { size: 32 }), transparent: true, side: THREE.DoubleSide })
                     );
-                    button.position.set(0, -0.52 - index * 0.17, 0.002);
+                    button.position.y = -0.10 - index * 0.22;
                     button.userData.xrMenuAction = item.action;
                     menu.add(button);
                     this.xrMenuItems.push(button);
@@ -889,18 +854,6 @@
                 } else if (action === 'music') {
                     this.toggleMusicBoxLoop();
                     this.playClinkSound();
-                } else if (action.startsWith('spawn-')) {
-                    if (this.currentSceneState !== 'taller') {
-                        this.playWobbleSound();
-                        return;
-                    }
-                    this.spawnToy(action.replace('spawn-', ''));
-                } else if (action === 'clear-toys') {
-                    if (this.currentSceneState !== 'taller') {
-                        this.playWobbleSound();
-                        return;
-                    }
-                    this.clearToys();
                 } else if (action === 'home') {
                     this.setXRMenuVisible(false);
                     if (this.currentSceneState === 'viaje') {
@@ -969,7 +922,7 @@
                 const oldMap = this.xrLightValueMesh.material.map;
                 this.xrLightValueMesh.material.map = this.createXRTextTexture(`${Math.round(this.xrLightLevel)}%`, 256, 128, {
                     size: 38,
-                    background: 'rgba(76, 92, 45, 0.95)'
+                    background: 'rgba(69, 26, 3, 0.95)'
                 });
                 this.xrLightValueMesh.material.needsUpdate = true;
                 if (oldMap) oldMap.dispose();
@@ -1024,6 +977,7 @@
 
                 if (this.currentSceneState === 'viaje') {
                     if (this.activeTravelToy === 'plane') {
+                        if (this.handleCloudGripStart(controller)) return;
                         this.tryGrabXRObjectFromCollection(controller, this.skyMovableObjects || [], 'sky');
                     } else if (this.activeTravelToy === 'boat') {
                         this.tryGrabXRObjectFromCollection(controller, this.boatMovableObjects || [], 'boat');
@@ -1034,7 +988,69 @@
             }
 
             onXRSqueezeEnd(controller) {
+                this.handleCloudGripEnd(controller);
                 if (this.activeXRController === controller) this.activeXRController = null;
+            }
+
+            handleCloudGripStart(controller) {
+                if (!controller || this.activeTravelToy !== 'plane' || !this.dispensedClouds?.length) return false;
+                const hits = this.raycaster.intersectObjects(this.dispensedClouds, true);
+                if (hits.length === 0) return false;
+
+                const cloud = this.findInteractiveParent(hits[0].object, this.dispensedClouds);
+                if (!cloud || cloud.userData.isPreview) return false;
+
+                const handedness = controller.userData.handedness || 'right';
+                this.cloudGripControllers[handedness] = { controller, cloud };
+
+                const otherHand = handedness === 'left' ? 'right' : 'left';
+                const other = this.cloudGripControllers[otherHand];
+                if (other?.cloud === cloud) {
+                    const p1 = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+                    const p2 = new THREE.Vector3().setFromMatrixPosition(other.controller.matrixWorld);
+                    this.cloudScaleGesture = {
+                        cloud,
+                        left: handedness === 'left' ? controller : other.controller,
+                        right: handedness === 'right' ? controller : other.controller,
+                        startDistance: Math.max(0.05, p1.distanceTo(p2)),
+                        startScale: cloud.userData.targetScale || cloud.scale.x || 0.35
+                    };
+                } else {
+                    this.cycleDispensedCloudSize(cloud);
+                }
+
+                this.playSparkleSound();
+                return true;
+            }
+
+            handleCloudGripEnd(controller) {
+                if (!controller || !this.cloudGripControllers) return;
+                const handedness = controller.userData.handedness || 'right';
+                const active = this.cloudGripControllers[handedness];
+                this.cloudGripControllers[handedness] = null;
+                if (this.cloudScaleGesture && active?.cloud === this.cloudScaleGesture.cloud) {
+                    this.cloudScaleGesture = null;
+                }
+            }
+
+            cycleDispensedCloudSize(cloud) {
+                if (!cloud || cloud.userData.isPreview) return;
+                const sizes = [0.35, 0.75, 1.15];
+                const current = cloud.userData.sizeStep ?? 0;
+                const next = (current + 1) % sizes.length;
+                cloud.userData.sizeStep = next;
+                cloud.userData.targetScale = sizes[next];
+            }
+
+            updateCloudScaleGesture() {
+                const gesture = this.cloudScaleGesture;
+                if (!gesture?.cloud?.parent || !gesture.left || !gesture.right) return;
+                const p1 = new THREE.Vector3().setFromMatrixPosition(gesture.left.matrixWorld);
+                const p2 = new THREE.Vector3().setFromMatrixPosition(gesture.right.matrixWorld);
+                const distance = Math.max(0.05, p1.distanceTo(p2));
+                const target = THREE.MathUtils.clamp(gesture.startScale * (distance / gesture.startDistance), 0.28, 1.35);
+                gesture.cloud.userData.targetScale = target;
+                gesture.cloud.userData.sizeStep = target < 0.55 ? 0 : target < 0.95 ? 1 : 2;
             }
 
             tryGrabXRObjectFromCollection(controller, collection, sceneType) {
@@ -1044,7 +1060,7 @@
                 let closestDist = this.GRAB_DISTANCE * 1.35;
 
                 for (const obj of collection) {
-                    if (!obj || !obj.parent) continue;
+                    if (!obj || !obj.parent || obj.userData.type === 'dispensedCloud') continue;
                     if (obj === this.heldObjectLeft || obj === this.heldObjectRight) continue;
                     const objPos = new THREE.Vector3();
                     obj.getWorldPosition(objPos);
@@ -1062,7 +1078,7 @@
                     }
                 }
 
-                if (!target) return false;
+                if (!target || target.userData.type === 'dispensedCloud') return false;
                 return this.grabXRObject(controller, target, sceneType);
             }
 
@@ -1208,21 +1224,6 @@
                 this.boatCabinLight.position.set(0, 1.2, 0.0);
                 this.boatCabinLight.castShadow = true;
                 this.viajeGroup.add(this.boatCabinLight);
-            }
-
-            setXRPerformanceMode(enabled) {
-                if (this.xrPerformanceMode === enabled) return;
-                this.xrPerformanceMode = enabled;
-
-                [this.lampLight, this.candleLight, this.boatCabinLight].forEach(light => {
-                    if (light) light.castShadow = !enabled;
-                });
-
-                if (this.windowLight) {
-                    const mapSize = enabled ? 512 : 1024;
-                    this.windowLight.shadow.mapSize.set(mapSize, mapSize);
-                    this.windowLight.shadow.needsUpdate = true;
-                }
             }
 
             // CREACIÓN DE LA HABITACIÓN CERRADA LOW-POLY
@@ -1959,12 +1960,9 @@
                 const tmpCenterA = new THREE.Vector3();
                 const tmpCenterB = new THREE.Vector3();
                 const REST_VELOCITY_THRESHOLD = 0.015;
-                const activePhysicsObjects = this.physicsObjects.filter(obj =>
-                    obj.mesh?.parent && this.isPhysicsMeshActive(obj.mesh)
-                );
-                if (!activePhysicsObjects.length) return;
 
-                activePhysicsObjects.forEach(obj => {
+                this.physicsObjects.forEach(obj => {
+                    if (!obj.mesh || !obj.mesh.parent) return;
                     if (
                         obj.mesh === this.selectedObject ||
                         obj.mesh === this.selectedBoatObject ||
@@ -2056,10 +2054,10 @@
                     }
                 });
 
-                for (let i = 0; i < activePhysicsObjects.length; i++) {
-                    for (let j = i + 1; j < activePhysicsObjects.length; j++) {
-                        const a = activePhysicsObjects[i];
-                        const b = activePhysicsObjects[j];
+                for (let i = 0; i < this.physicsObjects.length; i++) {
+                    for (let j = i + 1; j < this.physicsObjects.length; j++) {
+                        const a = this.physicsObjects[i];
+                        const b = this.physicsObjects[j];
                         if (!a.mesh?.parent || !b.mesh?.parent) continue;
 
                         // No resolver colisión entre objetos en niveles distintos
@@ -2143,17 +2141,9 @@
                 return false;
             }
 
-            isPhysicsMeshActive(mesh) {
-                for (let current = mesh; current; current = current.parent) {
-                    if (current.visible === false) return false;
-                }
-                return true;
-            }
-
             findDynamicSupportSurface(box, obj, tolerance = 0.12) {
                 for (const other of (this.physicsObjects || [])) {
                     if (!other || other === obj || !other.mesh?.parent) continue;
-                    if (!this.isPhysicsMeshActive(other.mesh)) continue;
                     if (
                         other.mesh === this.selectedObject ||
                         other.mesh === this.selectedBoatObject ||
@@ -2249,11 +2239,11 @@
             onPreviewKeyDown(event) {
                 if (this.isXRSessionActive || this.isTypingInUI(event) || event.repeat) return;
                 const key = event.key.toLowerCase();
-                const handled = ['z', 'w', 'a', 's', 'd', 'x', 'arrowdown', 'arrowup', 'j', 'i', 'k', 'l'].includes(key);
+                const handled = ['1', 'w', 'a', 's', 'd', 'x', 'arrowdown', 'arrowup', 'j', 'i', 'k', 'l'].includes(key);
                 if (!handled) return;
                 event.preventDefault();
 
-                if (key === 'z') {
+                if (key === '1') {
                     this.togglePreviewSpectatorMode();
                     return;
                 }
@@ -2412,7 +2402,7 @@
             }
 
             grabXRObject(controller, object, sceneType = 'taller') {
-                if (!controller || !object) return false;
+                if (!controller || !object || object.userData.type === 'dispensedCloud') return false;
                 const handedness = controller.userData.handedness;
                 if (object === this.heldObjectLeft || object === this.heldObjectRight) return false;
 
@@ -2822,33 +2812,10 @@
                 }
             }
 
-            disposeSceneResources(root) {
-                const geometries = new Set();
-                const materials = new Set();
-                const textures = new Set();
-
-                root.traverse(node => {
-                    if (node.geometry) geometries.add(node.geometry);
-                    const nodeMaterials = Array.isArray(node.material) ? node.material : [node.material];
-                    nodeMaterials.filter(Boolean).forEach(material => {
-                        materials.add(material);
-                        Object.values(material).forEach(value => {
-                            if (value?.isTexture) textures.add(value);
-                        });
-                    });
-                    if (node.skeleton?.dispose) node.skeleton.dispose();
-                });
-
-                geometries.forEach(geometry => geometry.dispose());
-                materials.forEach(material => material.dispose());
-                textures.forEach(texture => texture.dispose());
-            }
-
             clearTravelScene() {
                 const keep = new Set([this.viajeLightAmbient, this.viajeLightSun, this.boatCabinLight]);
                 [...this.viajeGroup.children].forEach(child => {
                     if (!keep.has(child)) {
-                        this.disposeSceneResources(child);
                         this.viajeGroup.remove(child);
                     }
                 });
@@ -2918,10 +2885,11 @@
                 this.skyMovableObjects = [];
                 this.selectedSkyObject = null;
                 this.dispensedClouds = [];
+                this.cloudGripControllers = { left: null, right: null };
+                this.cloudScaleGesture = null;
                 this.coinsCollected = 0;
                 this.skyFloorModel = null;
                 this.skySceneFloorY = 0.0;
-                this.planeSceneGroup = null;
                 if (this.birds) {
                     this.birds.forEach(b => this.viajeGroup.remove(b));
                     this.birds = [];
@@ -3071,8 +3039,6 @@
                 const group = new THREE.Group();
                 group.name = 'exit-pillar';
                 group.userData = { type: 'exitPillar' };
-                const signY = this.activeTravelToy === 'plane' ? 1.55 : 1.18;
-                const pillarHeight = signY - 0.16;
 
                 // Madera oscura para el pilar
                 const woodDark = new THREE.MeshStandardMaterial({ color: 0x3b2410, roughness: 0.85, metalness: 0.0 });
@@ -3094,8 +3060,8 @@
                 });
 
                 // Pilar octogonal de madera
-                const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.10, pillarHeight, 8), woodDark);
-                pillar.position.y = pillarHeight / 2;
+                const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.10, 1.1, 8), woodDark);
+                pillar.position.y = 0.55;
                 pillar.castShadow = true;
                 group.add(pillar);
 
@@ -3107,20 +3073,20 @@
 
                 // Panel de madera (fondo del cartel)
                 const panel = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.20, 0.05), woodPanel);
-                panel.position.y = signY;
+                panel.position.y = 1.18;
                 panel.castShadow = true;
                 group.add(panel);
 
                 // Marco alrededor del cartel (4 listones delgados)
                 const frameH = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.025, 0.055), woodFrame);
                 const frameHb = frameH.clone();
-                frameH.position.set(0, signY + 0.11, 0);
-                frameHb.position.set(0, signY - 0.11, 0);
+                frameH.position.set(0, 1.18 + 0.11, 0);
+                frameHb.position.set(0, 1.18 - 0.11, 0);
                 group.add(frameH, frameHb);
                 const frameV = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.22, 0.055), woodFrame);
                 const frameVr = frameV.clone();
-                frameV.position.set(-0.30, signY, 0);
-                frameVr.position.set(0.30, signY, 0);
+                frameV.position.set(-0.30, 1.18, 0);
+                frameVr.position.set(0.30, 1.18, 0);
                 group.add(frameV, frameVr);
 
                 // Texto SALIDA con fuente Inter, estilo tallado (letras oscuras sobre madera)
@@ -3129,7 +3095,7 @@
                     new THREE.PlaneGeometry(0.50, 0.16),
                     new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
                 );
-                textPanel.position.set(0, signY, 0.028);
+                textPanel.position.set(0, 1.18, 0.028);
                 group.add(textPanel);
 
                 const glowMat = new THREE.MeshBasicMaterial({
@@ -3141,12 +3107,12 @@
                     side: THREE.DoubleSide
                 });
                 const glowPanel = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.20), glowMat);
-                glowPanel.position.set(0, signY, 0.031);
+                glowPanel.position.set(0, 1.18, 0.031);
                 group.add(glowPanel);
 
                 // Luz cálida tenue (vela / lámpara de madera)
                 const light = new THREE.PointLight(0xffd778, 0.75, 1.7);
-                light.position.set(0, signY + 0.17, 0.25);
+                light.position.set(0, 1.35, 0.25);
                 group.add(light);
 
                 group.userData.exitSign = {
@@ -3279,7 +3245,7 @@
                 } else if (this.activeTravelToy === 'plane') {
                     this.leverModel.position.set(-1.55, 0.0, -0.2);
                     this.leverModel.rotation.y = Math.PI / 6;
-                    (this.planeSceneGroup || this.viajeGroup).add(this.leverModel);
+                    this.viajeGroup.add(this.leverModel);
                 } else {
                     this.leverModel.position.set(-1.15, 0.0, -0.9);
                     this.viajeGroup.add(this.leverModel);
@@ -4174,14 +4140,6 @@
 
             buildProceduralSkyScene() {
                 const skyGroup = new THREE.Group();
-                skyGroup.name = 'escenario-avion';
-                skyGroup.position.y = this.planeSceneYOffset;
-                this.planeSceneGroup = skyGroup;
-
-                if (this.activeTravelToy === 'plane' && this.leverModel) {
-                    this.planeSceneGroup.add(this.leverModel);
-                    this.positionLeverOnPlane();
-                }
 
                 const skyDome = new THREE.Mesh(
                     new THREE.SphereGeometry(15, 48, 24),
@@ -4427,7 +4385,6 @@
                     grid.name = `boat-${label}-wall-grid`;
                     grid.renderOrder = 25;
                     helperGroup.add(grid);
-
                 };
 
                 makeSideGrid('left', -1.38, 0xff6b6b);
@@ -4908,7 +4865,7 @@
                 machine.position.set(0.10, 0.52, -0.97);
                 machine.userData = { type: 'cloudMachine' };
                 this.cloudMachine = machine;
-                (this.planeSceneGroup || this.viajeGroup).add(machine);
+                this.viajeGroup.add(machine);
             }
 
             createSkyCoinTray() {
@@ -4943,13 +4900,13 @@
                 tray.add(rightRim);
 
                 const machinePos = this.cloudMachine?.position || new THREE.Vector3(0.10, 0.52, -0.97);
-                // Bandeja al frente de la maquina, 0.2 m mas cerca de la pared amarilla (+Z).
-                tray.position.set(machinePos.x - 0.10, 0.5, machinePos.z + 0.78);
+                // Bandeja 0.1 hacia la pared roja (-X) desde la maquina, y delante de la boca.
+                tray.position.set(machinePos.x - 0.10, 0, machinePos.z + 0.58);
                 tray.userData = { type: 'skyCoinTray' };
                 this.skyCoinTray = tray;
-                (this.planeSceneGroup || this.viajeGroup).add(tray);
+                this.viajeGroup.add(tray);
 
-                const topY = tray.position.y + floor.position.y + 0.045 / 2 + (this.planeSceneGroup?.position.y || 0);
+                const topY = tray.position.y + floor.position.y + 0.045 / 2;
                 this.registerStaticSurface(
                     tray.position.x - 0.38,
                     tray.position.x + 0.38,
@@ -4995,8 +4952,8 @@
                     coin.userData.phase = index * Math.PI * 0.4;
                     this.skyCoins.push(coin);
                     this.skyMovableObjects.push(coin);
-                    (this.planeSceneGroup || this.viajeGroup).add(coin);
-                    this.registerPhysicsObject(coin, 1.05 + (this.planeSceneGroup?.position.y || 0));
+                    this.viajeGroup.add(coin);
+                    this.registerPhysicsObject(coin, 1.05);
                 });
             }
 
@@ -5015,17 +4972,16 @@
             dispenseCoinFromMachine() {
                 if (!this.cloudMachine) return;
                 const coin = this.createSkyCoin();
-                const trayDropPoint = this.skyCoinTray?.position || this.cloudMachine.position;
                 coin.position.set(
-                    trayDropPoint.x,
+                    this.cloudMachine.position.x,
                     this.cloudMachine.position.y + 0.65,
-                    trayDropPoint.z
+                    this.cloudMachine.position.z + 0.52
                 );
                 coin.userData.type = 'skyCoinPhysics';
                 this.skyCoins.push(coin);
                 this.skyMovableObjects.push(coin);
-                (this.planeSceneGroup || this.viajeGroup).add(coin);
-                this.registerPhysicsObject(coin, this.planeSceneGroup?.position.y || 0.0);
+                this.viajeGroup.add(coin);
+                this.registerPhysicsObject(coin, 0.0);
                 const phys = this.physicsObjects.find(p => p.mesh === coin);
                 if (phys) {
                     phys.velocity.set((Math.random() - 0.5) * 0.05, 0, 0.02);
@@ -5096,7 +5052,7 @@
                 if (this.coinSlot) this.coinSlot.updateWorldMatrix(true, false);
                 const slotWorld = this.coinSlot ? this.coinSlot.getWorldPosition(new THREE.Vector3()) : null;
 
-                if (obj.userData.type === 'skyCoinPhysics' && slotWorld && obj.position.distanceTo(slotWorld) < 0.9) {
+                if (slotWorld && obj.position.distanceTo(slotWorld) < 0.9) {
                     const startPos = obj.position.clone();
                     const endPos = slotWorld.clone();
                     this.unregisterPhysicsObject(obj);
@@ -5111,7 +5067,7 @@
                         obj.rotation.z += 0.18;
                         if (t >= 1) {
                             clearInterval(fly);
-                            obj.parent?.remove(obj);
+                            this.viajeGroup.remove(obj);
                             this.skyCoins = this.skyCoins.filter(c => c !== obj);
                             this.skyMovableObjects = this.skyMovableObjects.filter(c => c !== obj);
                             this.dispenseCloud();
@@ -5147,32 +5103,26 @@
                 const cloud = this.createSingleFallbackCloud();
                 // Sale desde la boca del dispenser
                 const machinePos = this.cloudMachine ? this.cloudMachine.position.clone() : new THREE.Vector3(0.10, 0.52, -0.97);
-                const cloudDropPoint = this.skyCoinTray?.position || new THREE.Vector3(machinePos.x, 0, machinePos.z + 0.62);
-                const cloudSizes = [0.35, 0.75, 1.15];
-                const sizeStep = Math.floor(Math.random() * cloudSizes.length);
-                const initialScale = cloudSizes[sizeStep];
-                cloud.position.set(cloudDropPoint.x, machinePos.y + 0.65, cloudDropPoint.z);
-                cloud.scale.setScalar(initialScale);
+                cloud.position.set(machinePos.x, machinePos.y + 0.65, machinePos.z + 0.62);
+                cloud.scale.setScalar(0.35);
                 cloud.userData = {
                     type: 'dispensedCloud',
                     age: 0,
                     phase: Math.random() * Math.PI * 2,
                     flyingAway: false,
-                    stackable: true,
                     // 1 minuto en el piso (a ~60fps) antes de irse volando
                     groundedFrames: 3600,
-                    targetScale: initialScale,
-                    sizeStep
+                    targetScale: 0.35,
+                    sizeStep: 0
                 };
                 this.dispensedClouds.push(cloud);
-                this.skyMovableObjects.push(cloud);
-                (this.planeSceneGroup || this.viajeGroup).add(cloud);
+                this.viajeGroup.add(cloud);
 
                 // Cae al piso real del avion-escenario.
-                this.registerPhysicsObject(cloud, this.skySceneFloorY || (this.planeSceneGroup?.position.y || 0.0));
+                this.registerPhysicsObject(cloud, this.skySceneFloorY || 0.0);
                 const phys = this.physicsObjects.find(p => p.mesh === cloud);
                 if (phys) {
-                    phys.velocity.set(0, 0, 0);
+                    phys.velocity.set((Math.random() - 0.5) * 0.1, 0.0, 0.15);
                     phys.resting = false;
                 }
                 this.playSparkleSound();
@@ -5193,7 +5143,7 @@
                     isPreview: true
                 };
                 this.dispensedClouds.push(previewCloud);
-                (this.planeSceneGroup || this.viajeGroup).add(previewCloud);
+                this.viajeGroup.add(previewCloud);
             }
 
             createSingleFallbackCloud() {
@@ -5219,7 +5169,7 @@
                 this.createFallbackClouds();
 
                 loader.load(modelUrls.planeScene, (gltf) => {
-                    if (this.skyFloorModel) this.skyFloorModel.parent?.remove(this.skyFloorModel);
+                    if (this.skyFloorModel) this.viajeGroup.remove(this.skyFloorModel);
                     this.skyFloorModel = gltf.scene;
                     this.skyFloorModel.traverse(child => {
                         if (child.isMesh) {
@@ -5244,9 +5194,8 @@
                         -fittedBox.min.y,
                         -fittedCenter.z
                     );
-                    (this.planeSceneGroup || this.viajeGroup).add(this.skyFloorModel);
+                    this.viajeGroup.add(this.skyFloorModel);
 
-                    (this.planeSceneGroup || this.viajeGroup).updateMatrixWorld(true);
                     this.skyFloorModel.updateMatrixWorld(true);
                     const finalBox = new THREE.Box3().setFromObject(this.skyFloorModel);
                     const finalSize = finalBox.getSize(new THREE.Vector3());
@@ -5269,7 +5218,7 @@
                 }, undefined, () => {});
 
                 loader.load(modelUrls.cloud, (gltf) => {
-                    this.skyClouds.forEach(cloud => cloud.parent?.remove(cloud));
+                    this.skyClouds.forEach(cloud => this.viajeGroup.remove(cloud));
                     this.skyClouds = [];
 
                     const cloudTemplate = gltf.scene;
@@ -5300,12 +5249,12 @@
                             phase: index * Math.PI * 0.45
                         };
                         this.skyClouds.push(cloud);
-                        (this.planeSceneGroup || this.viajeGroup).add(cloud);
+                        this.viajeGroup.add(cloud);
                     });
                 }, undefined, () => {});
 
                 loader.load(modelUrls.planeLarge, (gltf) => {
-                    if (this.largePlaneModel) this.largePlaneModel.parent?.remove(this.largePlaneModel);
+                    if (this.largePlaneModel) this.viajeGroup.remove(this.largePlaneModel);
                     this.largePlaneModel = gltf.scene;
                     this.largePlaneModel.traverse(child => {
                         if (child.isMesh) {
@@ -5317,7 +5266,7 @@
                     const box = new THREE.Box3().setFromObject(this.largePlaneModel);
                     const size = box.getSize(new THREE.Vector3());
                     const maxDim = Math.max(size.x, size.y, size.z);
-                    const scaleFactor = 1.35 / maxDim;
+                    const scaleFactor = 0.9 / maxDim;
                     const center = box.getCenter(new THREE.Vector3());
 
                     this.largePlaneModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
@@ -5327,8 +5276,8 @@
                         0.4 - center.z * scaleFactor
                     );
                     this.largePlaneModel.userData.baseY = 1.05 - box.min.y * scaleFactor;
-                    this.largePlaneModel.rotation.y = 0;
-                    (this.planeSceneGroup || this.viajeGroup).add(this.largePlaneModel);
+                    this.largePlaneModel.rotation.y = Math.PI / 2;
+                    this.viajeGroup.add(this.largePlaneModel);
 
                     if (this.activeTravelToy === 'plane' && this.leverModel) {
                         this.positionLeverOnPlane();
@@ -5369,7 +5318,7 @@
                         phase: index * Math.PI * 0.5
                     };
                     this.skyClouds.push(cloud);
-                    (this.planeSceneGroup || this.viajeGroup).add(cloud);
+                    this.viajeGroup.add(cloud);
                 });
             }
 
@@ -5581,10 +5530,7 @@
                                 pos.setY(i, Math.sin(x * 0.7 + t * 0.9) * 0.18 + Math.sin(z * 0.5 + t * 0.7) * 0.14);
                             }
                             pos.needsUpdate = true;
-                            if (elapsedTime - this._seaLastNormalUpdate >= 1 / 24) {
-                                this.seaMesh.geometry.computeVertexNormals();
-                                this._seaLastNormalUpdate = elapsedTime;
-                            }
+                            this.seaMesh.geometry.computeVertexNormals();
                         }
                     }
                     if (this.seaBoat) {
@@ -5626,6 +5572,8 @@
                         this.cloudMachine.rotation.y = Math.sin(elapsedTime * 0.7) * 0.05;
                     }
 
+                    this.updateCloudScaleGesture();
+
                     if (this.dispensedClouds && this.dispensedClouds.length > 0) {
                         const aliveClouds = [];
                         this.dispensedClouds.forEach(cloud => {
@@ -5659,8 +5607,7 @@
                                 });
                                 if (opacity <= 0) {
                                     this.unregisterPhysicsObject(cloud);
-                                    cloud.parent?.remove(cloud);
-                                    this.skyMovableObjects = this.skyMovableObjects.filter(obj => obj !== cloud);
+                                    this.viajeGroup.remove(cloud);
                                     return; // no la agregamos a aliveClouds
                                 }
                             }
@@ -6291,3 +6238,12 @@
     </script>
   </body>
 </html>
+
+
+
+
+
+
+
+
+

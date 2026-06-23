@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Taller del Juguetero 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+        body { font-family: 'Quicksand', sans-serif; background-color: #0f0a06; margin: 0; overflow: hidden; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .ui { position: absolute; z-index: 10; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <script>
+        // Configuración de la escena
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        
+        // CORRECCIÓN: Usar THREE.GLTFLoader correctamente
+        const loader = new THREE.GLTFLoader();
+        
+        // Palanca (Carga)
+        let palanca = null;
+        loader.load("https://raw.githubusercontent.com/Joo0o0oo/Joo0o0oo/main/palanca.glb", (gltf) => {
+            palanca = gltf.scene;
+            palanca.position.set(0, 0, -2);
+            palanca.visible = false;
+            scene.add(palanca);
+        });
+
+        function returnToTaller() {
+            console.log("Regresando al taller...");
+            if(palanca) palanca.visible = false;
+        }
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            
+            if (palanca && palanca.visible) {
+                const intersects = raycaster.intersectObject(palanca, true);
+                if (intersects.length > 0) {
+                    returnToTaller();
+                }
+            }
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
